@@ -1,4 +1,4 @@
-import { isMissingContentScriptError } from "./lib.js";
+import { canUsePreparedRows, isMissingContentScriptError } from "./lib.js";
 
 const itemIdsInput = document.querySelector("#itemIds");
 const previewButton = document.querySelector("#previewButton");
@@ -175,6 +175,7 @@ async function restoreSavedJob() {
   preparedRows = jobState.rows || [];
   renderPreview(preparedRows, []);
   renderJobState(jobState);
+  updateActionButtons();
 }
 
 function renderJobState(jobState) {
@@ -264,14 +265,20 @@ function renderPreview(rows, problems) {
 
 function setLoading(message) {
   previewButton.disabled = true;
+  downloadButton.disabled = true;
   fillButton.disabled = true;
   setStatus(message);
 }
 
 function clearLoading() {
   previewButton.disabled = false;
-  downloadButton.disabled = preparedRows.length === 0;
-  fillButton.disabled = preparedRows.length === 0;
+  updateActionButtons();
+}
+
+function updateActionButtons() {
+  const hasRows = canUsePreparedRows(preparedRows);
+  downloadButton.disabled = !hasRows;
+  fillButton.disabled = !hasRows;
 }
 
 function setStatus(message, isError = false) {

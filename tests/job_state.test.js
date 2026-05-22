@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { createJobState, updateJobState } from "../src/lib.js";
+import { canUsePreparedRows, createJobState, updateJobState } from "../src/lib.js";
 
 test("createJobState stores rows and initial progress for resumable popup state", () => {
   const rows = [
@@ -37,4 +37,18 @@ test("updateJobState changes status while preserving rows", () => {
     currentIndex: 1,
     updatedAt: "2026-05-22T01:03:00.000Z",
   });
+});
+
+test("canUsePreparedRows returns true for restored saved jobs with rows", () => {
+  const state = createJobState(
+    {
+      itemIds: ["112549"],
+      rows: [{ itemId: "112549", imageUrl: "https://img.example/a.jpg", caption: "Caption A" }],
+    },
+    "2026-05-22T01:02:03.000Z",
+  );
+
+  assert.equal(canUsePreparedRows(state.rows), true);
+  assert.equal(canUsePreparedRows([]), false);
+  assert.equal(canUsePreparedRows(null), false);
 });

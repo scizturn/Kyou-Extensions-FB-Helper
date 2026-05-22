@@ -90,6 +90,10 @@ export function updateJobState(state, patch, now = new Date().toISOString()) {
   };
 }
 
+export function canUsePreparedRows(rows) {
+  return Array.isArray(rows) && rows.length > 0;
+}
+
 export function normalizeStaffTabOptions(options) {
   if (!Array.isArray(options)) {
     return [];
