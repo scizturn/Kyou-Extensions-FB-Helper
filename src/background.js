@@ -1,4 +1,10 @@
-import { createJobState, normalizeStaffTabOptions, parseItemIds, updateJobState } from "./lib.js";
+import {
+  buildDownloadFilename,
+  createJobState,
+  normalizeStaffTabOptions,
+  parseItemIds,
+  updateJobState,
+} from "./lib.js";
 
 const JOB_STATE_KEY = "fbHelperJobState";
 
@@ -25,6 +31,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message?.type === "UPDATE_JOB_STATE") {
     mergeJobState(message.patch || {}).then(sendResponse);
+    return true;
+  }
+  if (message?.type === "DOWNLOAD_IMAGES") {
+    downloadImages(message.rows || [])
+      .then(sendResponse)
+      .catch((error) => {
+        sendResponse({ ok: false, error: error.message || String(error) });
+      });
     return true;
   }
   if (message?.type === "CLEAR_JOB_STATE") {
@@ -126,4 +140,23 @@ async function mergeJobState(patch) {
   const jobState = updateJobState(current, patch);
   await chrome.storage.local.set({ [JOB_STATE_KEY]: jobState });
   return { ok: true, jobState };
+}
+
+async function downloadImages(rows) {
+  if (!Array.isArray(rows) || !rows.length) {
+    return { ok: false, error: "No prepared rows to download." };
+  }
+  const downloadIds = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = rows[index];
+    const downloadId = await chrome.downloads.download({
+      url: row.imageUrl,
+      filename: buildDownloadFilename(row, index),
+      conflictAction: "uniquify",
+      saveAs: false,
+    });
+    downloadIds.push(downloadId);
+  }
+  await mergeJobState({ status: "images_downloaded", currentIndex: rows.length, error: "" });
+  return { ok: true, downloadIds, message: `Downloaded ${rows.length} images to kyou-fb-upload.` };
 }

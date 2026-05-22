@@ -1,9 +1,16 @@
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message?.type !== "FB_HELPER_FILL_ALBUM") {
+  if (message?.type === "FB_HELPER_FILL_ALBUM") {
+    sendResponse({
+      ok: false,
+      error: "Auto-upload is disabled. Download images, upload them manually in Facebook, then click Fill captions.",
+    });
+    return false;
+  }
+  if (message?.type !== "FB_HELPER_FILL_CAPTIONS") {
     return false;
   }
 
-  fillAlbum(message.rows)
+  fillVisibleCaptions(message.rows)
     .then(sendResponse)
     .catch((error) => {
       sendResponse({ ok: false, error: error.message || String(error) });
@@ -11,33 +18,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
-async function fillAlbum(rows) {
+async function fillVisibleCaptions(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("No prepared rows received.");
   }
 
-  const input = await findOrOpenFileInput();
-  const existingFields = new Set(findCaptionFields());
-  await updateJob({ status: "downloading", currentIndex: 0, error: "" });
-  const files = [];
-  for (let index = 0; index < rows.length; index += 1) {
-    files.push(await rowToFile(rows[index]));
-    await updateJob({ status: "downloading", currentIndex: index + 1 });
-  }
-  const transfer = new DataTransfer();
-  for (const file of files) {
-    transfer.items.add(file);
-  }
-
-  input.files = transfer.files;
-  input.dispatchEvent(new Event("input", { bubbles: true }));
-  input.dispatchEvent(new Event("change", { bubbles: true }));
-
   await updateJob({ status: "caption_filling", currentIndex: 0 });
-  const fields = await waitForNewCaptionFields(existingFields, rows.length);
+  const fields = await waitForEmptyCaptionFields(rows.length);
   if (fields.length < rows.length) {
     throw new Error(
-      `Facebook did not create enough new description fields after upload. Found ${fields.length}/${rows.length}.`,
+      `Could not find enough empty Facebook description fields. Found ${fields.length}/${rows.length}. Upload the downloaded images first, then try Fill captions.`,
     );
   }
   fillCaptionFields(fields, rows);
@@ -45,7 +35,7 @@ async function fillAlbum(rows) {
 
   return {
     ok: true,
-    message: `Uploaded ${files.length} image files and filled ${rows.length} captions. Review before saving.`,
+    message: `Filled ${rows.length} captions. Review before saving.`,
   };
 }
 
@@ -57,50 +47,12 @@ async function updateJob(patch) {
   }
 }
 
-async function findOrOpenFileInput() {
-  let input = findFileInput();
-  if (input) {
-    return input;
-  }
-
-  const button = findButtonByText(["Upload photos or videos", "Add photos/videos", "Upload"]);
-  if (!button) {
-    throw new Error("Could not find Facebook upload button.");
-  }
-  button.click();
-  input = await waitFor(findFileInput, 8000);
-  if (!input) {
-    throw new Error("Facebook file input did not appear.");
-  }
-  return input;
-}
-
-function findFileInput() {
-  const inputs = [...document.querySelectorAll("input[type='file']")];
-  return inputs.find((input) => {
-    const accept = String(input.accept || "").toLowerCase();
-    return input.multiple || accept.includes("image") || accept.includes("video");
-  });
-}
-
-async function rowToFile(row) {
-  const response = await fetch(row.imageUrl, { credentials: "omit" });
-  if (!response.ok) {
-    throw new Error(`${row.itemId}: image download failed HTTP ${response.status}`);
-  }
-  const blob = await response.blob();
-  const extension = extensionFromType(blob.type) || extensionFromUrl(row.imageUrl) || "jpg";
-  return new File([blob], `${row.itemId}.${extension}`, {
-    type: blob.type || "image/jpeg",
-  });
-}
-
-async function waitForNewCaptionFields(existingFields, expectedCount) {
+async function waitForEmptyCaptionFields(expectedCount) {
   const fields = await waitFor(() => {
-    const found = findCaptionFields().filter((field) => !existingFields.has(field));
+    const found = findCaptionFields().filter(isEditableEmpty);
     return found.length >= expectedCount ? found : null;
   }, 30000);
-  return fields || findCaptionFields().filter((field) => !existingFields.has(field));
+  return fields || findCaptionFields().filter(isEditableEmpty);
 }
 
 function findCaptionFields() {
@@ -139,6 +91,14 @@ function fillCaptionFields(fields, rows) {
   for (let index = 0; index < count; index += 1) {
     setEditableValue(fields[index], rows[index].caption);
   }
+}
+
+function isEditableEmpty(node) {
+  return editableValue(node).trim() === "";
+}
+
+function editableValue(node) {
+  return "value" in node ? String(node.value || "") : String(node.textContent || "");
 }
 
 function setEditableValue(node, value) {
@@ -193,23 +153,4 @@ async function waitFor(fn, timeoutMs) {
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
   return null;
-}
-
-function extensionFromType(type) {
-  const normalized = String(type || "").split(";")[0].trim().toLowerCase();
-  if (normalized === "image/jpeg") {
-    return "jpg";
-  }
-  if (normalized === "image/png") {
-    return "png";
-  }
-  if (normalized === "image/webp") {
-    return "webp";
-  }
-  return "";
-}
-
-function extensionFromUrl(url) {
-  const match = String(url || "").match(/\.([a-z0-9]{3,4})(?:[?#]|$)/i);
-  return match ? match[1].toLowerCase() : "";
 }

@@ -2,6 +2,7 @@ import { isMissingContentScriptError } from "./lib.js";
 
 const itemIdsInput = document.querySelector("#itemIds");
 const previewButton = document.querySelector("#previewButton");
+const downloadButton = document.querySelector("#downloadButton");
 const fillButton = document.querySelector("#fillButton");
 const clearButton = document.querySelector("#clearButton");
 const refreshTabsButton = document.querySelector("#refreshTabsButton");
@@ -26,6 +27,7 @@ async function init() {
   itemIdsInput.addEventListener("input", () => {
     chrome.storage.local.set({ itemIds: itemIdsInput.value });
     preparedRows = [];
+    downloadButton.disabled = true;
     fillButton.disabled = true;
     previewEl.textContent = "";
   });
@@ -34,6 +36,7 @@ async function init() {
   staffTabInput.addEventListener("change", saveSettings);
 
   previewButton.addEventListener("click", previewItems);
+  downloadButton.addEventListener("click", downloadImages);
   fillButton.addEventListener("click", fillFacebook);
   clearButton.addEventListener("click", clearSavedJob);
   refreshTabsButton.addEventListener("click", loadStaffTabs);
@@ -80,7 +83,7 @@ async function fillFacebook() {
     return;
   }
 
-  setLoading("Sending rows to Facebook page...");
+  setLoading("Filling captions on Facebook page...");
   const tab = await getActiveTab();
   if (!isFacebookTab(tab)) {
     setStatus("Open the Facebook album edit tab first.", true);
@@ -91,7 +94,7 @@ async function fillFacebook() {
   try {
     await chrome.runtime.sendMessage({
       type: "UPDATE_JOB_STATE",
-      patch: { status: "uploading", currentIndex: 0, error: "" },
+      patch: { status: "caption_filling", currentIndex: 0, error: "" },
     });
     const response = await sendFillMessage(tab.id, preparedRows);
 
@@ -123,7 +126,7 @@ async function fillFacebook() {
 async function sendFillMessage(tabId, rows) {
   try {
     return await chrome.tabs.sendMessage(tabId, {
-      type: "FB_HELPER_FILL_ALBUM",
+      type: "FB_HELPER_FILL_CAPTIONS",
       rows,
     });
   } catch (error) {
@@ -136,9 +139,30 @@ async function sendFillMessage(tabId, rows) {
     });
     await new Promise((resolve) => setTimeout(resolve, 300));
     return chrome.tabs.sendMessage(tabId, {
-      type: "FB_HELPER_FILL_ALBUM",
+      type: "FB_HELPER_FILL_CAPTIONS",
       rows,
     });
+  }
+}
+
+async function downloadImages() {
+  if (!preparedRows.length) {
+    setStatus("Preview items first.", true);
+    return;
+  }
+  setLoading("Downloading images...");
+  try {
+    const response = await chrome.runtime.sendMessage({
+      type: "DOWNLOAD_IMAGES",
+      rows: preparedRows,
+    });
+    if (!response?.ok) {
+      setStatus(response?.error || "Download failed.", true);
+      return;
+    }
+    setStatus(`${response.message} Upload them manually in Facebook, then click Fill captions.`);
+  } finally {
+    clearLoading();
   }
 }
 
@@ -166,6 +190,7 @@ function renderJobState(jobState) {
 async function clearSavedJob() {
   await chrome.runtime.sendMessage({ type: "CLEAR_JOB_STATE" });
   preparedRows = [];
+  downloadButton.disabled = true;
   fillButton.disabled = true;
   previewEl.textContent = "";
   setStatus("Saved job cleared.");
@@ -245,6 +270,7 @@ function setLoading(message) {
 
 function clearLoading() {
   previewButton.disabled = false;
+  downloadButton.disabled = preparedRows.length === 0;
   fillButton.disabled = preparedRows.length === 0;
 }
 

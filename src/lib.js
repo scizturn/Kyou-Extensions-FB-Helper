@@ -109,6 +109,13 @@ export function isMissingContentScriptError(error) {
     .includes("receiving end does not exist");
 }
 
+export function buildDownloadFilename(row, index) {
+  const order = String(index + 1).padStart(3, "0");
+  const itemId = String(row?.itemId || "item").replace(/[^a-z0-9_-]/gi, "");
+  const extension = extensionFromUrl(row?.imageUrl) || "jpg";
+  return `kyou-fb-upload/${order}-${itemId}.${extension}`;
+}
+
 export async function fetchKyouItems(itemIds, fetchImpl = fetch) {
   const rows = [];
   for (const itemId of itemIds) {
@@ -209,4 +216,9 @@ function decodeHtml(value) {
 
 function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function extensionFromUrl(url) {
+  const match = String(url || "").match(/\.([a-z0-9]{3,4})(?:[?#]|$)/i);
+  return match ? match[1].toLowerCase() : "";
 }

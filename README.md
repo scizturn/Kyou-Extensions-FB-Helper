@@ -13,9 +13,11 @@ The extension does not use the Facebook Graph API. Staff stays logged in to Face
 5. Paste item IDs or Kyou item links.
 6. Click **Preview**.
 7. Confirm the generated image/caption preview.
-8. Click **Fill Facebook**.
-9. Review the uploaded photos and descriptions in Facebook.
-10. Save/post manually in Facebook.
+8. Click **Download images**.
+9. In Facebook, click **Upload photos or videos** and manually select the downloaded files from `Downloads/kyou-fb-upload`.
+10. After Facebook shows the new empty description boxes, click **Fill captions**.
+11. Review the uploaded photos and descriptions in Facebook.
+12. Save/post manually in Facebook.
 
 ## How It Works
 
@@ -23,7 +25,8 @@ The extension does not use the Facebook Graph API. Staff stays logged in to Face
 - The popup loads helper/staff tabs from Furina's private `/fb-album-extension/config` endpoint.
 - Furina uses its Google service account to write/read the private FB helper Google Sheet.
 - `src/lib.js` contains item ID parsing, Kyou page fallback helpers, validation, and resumable job state helpers.
-- `src/content.js` runs on Facebook pages, finds the upload file input, downloads image URLs as browser `File` objects, assigns them to the input, then fills visible caption/description fields.
+- `src/background.js` downloads prepared images into `Downloads/kyou-fb-upload`.
+- `src/content.js` runs on Facebook pages and fills empty caption/description fields after staff manually uploads the downloaded files.
 - `src/popup.js` manages the staff UI and passes prepared rows to the Facebook tab.
 
 ## Furina Setup
@@ -70,7 +73,7 @@ node --check src/content.js
 
 ## Limits
 
-Facebook UI automation is fragile because Facebook can change labels, DOM structure, upload timing, or checkpoint flows. The extension intentionally stops before final save/post so staff can review the result.
+Facebook UI automation is fragile because Facebook can change labels, DOM structure, upload timing, or checkpoint flows. The extension intentionally avoids programmatic file upload and stops before final save/post so staff can review the result.
 
 The popup can close after a job is prepared. Job state is saved in Chrome local storage, and the content script updates progress while it downloads images and fills captions. If Chrome or the Facebook tab is closed, reopen the popup and clear/retry the saved job.
 
