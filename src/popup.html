@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FB Helper</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>FB Helper</h1>
+        <span id="pageState">Album page required</span>
+      </header>
+
+      <label for="itemIds">Item IDs</label>
+      <textarea id="itemIds" rows="8" placeholder="112549&#10;169575&#10;https://kyou.id/items/156998"></textarea>
+
+      <div class="actions">
+        <button id="previewButton" type="button">Preview</button>
+        <button id="fillButton" type="button" disabled>Fill Facebook</button>
+      </div>
+
+      <section id="status" aria-live="polite"></section>
+      <section id="preview"></section>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

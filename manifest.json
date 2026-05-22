@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Kyou FB Upload Helper",
+  "version": "0.1.0",
+  "description": "Prepare Kyou item images and captions, then fill Facebook album uploads through the web UI.",
+  "action": {
+    "default_title": "FB Helper",
+    "default_popup": "src/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://facebook.com/*"
+      ],
+      "js": ["src/content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "permissions": ["activeTab", "storage", "tabs"],
+  "host_permissions": [
+    "https://kyou.id/*",
+    "https://www.kyou.id/*",
+    "https://*/*",
+    "https://*.fbcdn.net/*",
+    "https://*.facebook.com/*",
+    "https://www.facebook.com/*",
+    "https://facebook.com/*"
+  ]
+}
