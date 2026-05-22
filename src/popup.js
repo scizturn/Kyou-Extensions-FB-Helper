@@ -1,4 +1,4 @@
-import { canUsePreparedRows, isMissingContentScriptError, normalizeWarnings } from "./lib.js";
+import { buildDownloadFilename, canUsePreparedRows, isMissingContentScriptError, normalizeWarnings } from "./lib.js";
 
 const itemIdsInput = document.querySelector("#itemIds");
 const previewButton = document.querySelector("#previewButton");
@@ -150,17 +150,47 @@ async function downloadImages() {
     setStatus("Preview items first.", true);
     return;
   }
+  let dirHandle;
+  try {
+    dirHandle = await window.showDirectoryPicker({
+      id: "kyou-download-folder",
+      mode: "readwrite",
+    });
+  } catch (error) {
+    if (error.name !== "AbortError") {
+      setStatus(error.message || String(error), true);
+    }
+    return;
+  }
+
   setLoading("Downloading images...");
   try {
-    const response = await chrome.runtime.sendMessage({
-      type: "DOWNLOAD_IMAGES",
-      rows: preparedRows,
-    });
-    if (!response?.ok) {
-      setStatus(response?.error || "Download failed.", true);
-      return;
+    let successCount = 0;
+    for (let index = 0; index < preparedRows.length; index += 1) {
+      const row = preparedRows[index];
+      const filename = buildDownloadFilename(row, index, "");
+      try {
+        const response = await fetch(row.imageUrl);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
+        const writable = await fileHandle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        successCount += 1;
+      } catch (err) {
+        console.error(`Failed to download ${row.imageUrl}:`, err);
+      }
     }
-    setStatus(`${response.message} Upload them manually in Facebook, then click Fill captions.`);
+    
+    await chrome.runtime.sendMessage({
+      type: "UPDATE_JOB_STATE",
+      patch: { status: "images_downloaded", currentIndex: preparedRows.length, error: "" },
+    });
+    
+    setStatus(`Downloaded ${successCount} images. Upload them manually in Facebook, then click Fill captions.`);
+  } catch (error) {
+    setStatus(error.message || "Download failed.", true);
   } finally {
     clearLoading();
   }
