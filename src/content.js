@@ -17,6 +17,7 @@ async function fillAlbum(rows) {
   }
 
   const input = await findOrOpenFileInput();
+  const existingFields = new Set(findCaptionFields());
   await updateJob({ status: "downloading", currentIndex: 0, error: "" });
   const files = [];
   for (let index = 0; index < rows.length; index += 1) {
@@ -33,13 +34,18 @@ async function fillAlbum(rows) {
   input.dispatchEvent(new Event("change", { bubbles: true }));
 
   await updateJob({ status: "caption_filling", currentIndex: 0 });
-  const fields = await waitForCaptionFields(rows.length);
+  const fields = await waitForNewCaptionFields(existingFields, rows.length);
+  if (fields.length < rows.length) {
+    throw new Error(
+      `Facebook did not create enough new description fields after upload. Found ${fields.length}/${rows.length}.`,
+    );
+  }
   fillCaptionFields(fields, rows);
-  await updateJob({ status: "done", currentIndex: Math.min(fields.length, rows.length), error: "" });
+  await updateJob({ status: "done", currentIndex: rows.length, error: "" });
 
   return {
     ok: true,
-    message: `Uploaded ${files.length} image files and filled ${Math.min(fields.length, rows.length)} captions. Review before saving.`,
+    message: `Uploaded ${files.length} image files and filled ${rows.length} captions. Review before saving.`,
   };
 }
 
@@ -89,12 +95,12 @@ async function rowToFile(row) {
   });
 }
 
-async function waitForCaptionFields(expectedCount) {
+async function waitForNewCaptionFields(existingFields, expectedCount) {
   const fields = await waitFor(() => {
-    const found = findCaptionFields();
+    const found = findCaptionFields().filter((field) => !existingFields.has(field));
     return found.length >= expectedCount ? found : null;
   }, 30000);
-  return fields || findCaptionFields();
+  return fields || findCaptionFields().filter((field) => !existingFields.has(field));
 }
 
 function findCaptionFields() {
@@ -112,7 +118,8 @@ function findCaptionFields() {
         label.includes("description") ||
         label.includes("caption") ||
         label.includes("optional") ||
-        label.includes("say something")
+        label.includes("say something") ||
+        isAlbumGridTextField(node)
       );
     })
     .sort((a, b) => {
@@ -120,6 +127,11 @@ function findCaptionFields() {
       const br = b.getBoundingClientRect();
       return ar.top === br.top ? ar.left - br.left : ar.top - br.top;
     });
+}
+
+function isAlbumGridTextField(node) {
+  const rect = node.getBoundingClientRect();
+  return rect.left > 320 && rect.top > 40 && rect.width >= 120 && rect.height >= 30;
 }
 
 function fillCaptionFields(fields, rows) {
