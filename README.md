@@ -9,7 +9,7 @@ The extension does not use the Facebook Graph API. Staff stays logged in to Face
 1. Open the Facebook album edit page.
 2. Open the extension popup.
 3. Open **Furina settings** and fill the Furina URL plus extension token.
-4. Fill the staff tab name, for example `FB - Helper - REGA`.
+4. Choose the helper/staff tab from the dropdown.
 5. Paste item IDs or Kyou item links.
 6. Click **Preview**.
 7. Confirm the generated image/caption preview.
@@ -20,6 +20,7 @@ The extension does not use the Facebook Graph API. Staff stays logged in to Face
 ## How It Works
 
 - `src/background.js` parses item IDs, calls Furina's private `/fb-album-extension/prepare` endpoint, and saves the current job state.
+- The popup loads helper/staff tabs from Furina's private `/fb-album-extension/config` endpoint.
 - Furina uses its Google service account to write/read the private FB helper Google Sheet.
 - `src/lib.js` contains item ID parsing, Kyou page fallback helpers, validation, and resumable job state helpers.
 - `src/content.js` runs on Facebook pages, finds the upload file input, downloads image URLs as browser `File` objects, assigns them to the input, then fills visible caption/description fields.

@@ -1,4 +1,4 @@
-import { createJobState, parseItemIds, updateJobState } from "./lib.js";
+import { createJobState, normalizeStaffTabOptions, parseItemIds, updateJobState } from "./lib.js";
 
 const JOB_STATE_KEY = "fbHelperJobState";
 
@@ -13,6 +13,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   if (message?.type === "GET_JOB_STATE") {
     getJobState().then(sendResponse);
+    return true;
+  }
+  if (message?.type === "GET_STAFF_TABS") {
+    getStaffTabs()
+      .then(sendResponse)
+      .catch((error) => {
+        sendResponse({ ok: false, error: error.message || String(error), staffTabs: [] });
+      });
     return true;
   }
   if (message?.type === "UPDATE_JOB_STATE") {
@@ -75,6 +83,26 @@ async function prepareKyouItems(message) {
   const jobState = createJobState({ itemIds, rows: payload.rows });
   await chrome.storage.local.set({ [JOB_STATE_KEY]: jobState });
   return { ...payload, jobState };
+}
+
+async function getStaffTabs() {
+  const settings = await getSettings();
+  if (!settings.furinaBaseUrl || !settings.furinaToken) {
+    return { ok: false, error: "Set Furina URL and token first.", staffTabs: [] };
+  }
+
+  const response = await fetch(`${settings.furinaBaseUrl}/fb-album-extension/config`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${settings.furinaToken}`,
+    },
+  });
+  const payload = await response.json();
+  return {
+    ok: response.ok && Boolean(payload?.ok),
+    error: payload?.error || "",
+    staffTabs: normalizeStaffTabOptions(payload?.staffTabs),
+  };
 }
 
 async function getSettings() {

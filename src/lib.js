@@ -90,6 +90,19 @@ export function updateJobState(state, patch, now = new Date().toISOString()) {
   };
 }
 
+export function normalizeStaffTabOptions(options) {
+  if (!Array.isArray(options)) {
+    return [];
+  }
+  return options
+    .map((option) => {
+      const value = String(option?.value || "").trim();
+      const label = String(option?.label || value).trim();
+      return { label, value };
+    })
+    .filter((option) => option.value);
+}
+
 export async function fetchKyouItems(itemIds, fetchImpl = fetch) {
   const rows = [];
   for (const itemId of itemIds) {

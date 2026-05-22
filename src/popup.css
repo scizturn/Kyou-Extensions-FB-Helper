@@ -54,6 +54,7 @@ summary {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   margin-bottom: 10px;
@@ -92,6 +93,12 @@ button {
 }
 
 #clearButton {
+  grid-column: 1 / -1;
+  color: #24292f;
+  background: #d8dee4;
+}
+
+#refreshTabsButton {
   grid-column: 1 / -1;
   color: #24292f;
   background: #d8dee4;

@@ -22,7 +22,9 @@
       </details>
 
       <label for="staffTab">Staff tab</label>
-      <input id="staffTab" type="text" placeholder="FB - Helper - REGA">
+      <select id="staffTab">
+        <option value="">Set Furina settings, then choose helper</option>
+      </select>
 
       <label for="itemIds">Item IDs</label>
       <textarea id="itemIds" rows="8" placeholder="112549&#10;169575&#10;https://kyou.id/items/156998"></textarea>
@@ -30,6 +32,7 @@
       <div class="actions">
         <button id="previewButton" type="button">Preview</button>
         <button id="fillButton" type="button" disabled>Fill Facebook</button>
+        <button id="refreshTabsButton" type="button">Refresh helpers</button>
         <button id="clearButton" type="button">Clear saved job</button>
       </div>
 

@@ -2,6 +2,7 @@ const itemIdsInput = document.querySelector("#itemIds");
 const previewButton = document.querySelector("#previewButton");
 const fillButton = document.querySelector("#fillButton");
 const clearButton = document.querySelector("#clearButton");
+const refreshTabsButton = document.querySelector("#refreshTabsButton");
 const statusEl = document.querySelector("#status");
 const previewEl = document.querySelector("#preview");
 const pageStateEl = document.querySelector("#pageState");
@@ -28,14 +29,16 @@ async function init() {
   });
   furinaBaseUrlInput.addEventListener("input", saveSettings);
   furinaTokenInput.addEventListener("input", saveSettings);
-  staffTabInput.addEventListener("input", saveSettings);
+  staffTabInput.addEventListener("change", saveSettings);
 
   previewButton.addEventListener("click", previewItems);
   fillButton.addEventListener("click", fillFacebook);
   clearButton.addEventListener("click", clearSavedJob);
+  refreshTabsButton.addEventListener("click", loadStaffTabs);
 
   const tab = await getActiveTab();
   pageStateEl.textContent = isFacebookTab(tab) ? "Facebook tab detected" : "Open Facebook album first";
+  await loadStaffTabs();
   await restoreSavedJob();
 }
 
@@ -144,8 +147,40 @@ function saveSettings() {
   chrome.storage.local.set({
     furinaBaseUrl: furinaBaseUrlInput.value.trim(),
     furinaToken: furinaTokenInput.value,
-    staffTab: staffTabInput.value.trim(),
+    staffTab: staffTabInput.value,
   });
+}
+
+async function loadStaffTabs() {
+  const selectedValue = staffTabInput.value;
+  const response = await chrome.runtime.sendMessage({ type: "GET_STAFF_TABS" });
+  if (!response?.ok) {
+    renderStaffTabs([], selectedValue);
+    if (furinaBaseUrlInput.value || furinaTokenInput.value) {
+      setStatus(response?.error || "Failed to load helper tabs.", true);
+    }
+    return;
+  }
+  renderStaffTabs(response.staffTabs || [], selectedValue);
+}
+
+function renderStaffTabs(staffTabs, selectedValue) {
+  staffTabInput.textContent = "";
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = staffTabs.length ? "Choose helper tab" : "No helper tabs loaded";
+  staffTabInput.append(placeholder);
+
+  for (const tab of staffTabs) {
+    const option = document.createElement("option");
+    option.value = tab.value;
+    option.textContent = tab.label;
+    staffTabInput.append(option);
+  }
+
+  if (selectedValue && staffTabs.some((tab) => tab.value === selectedValue)) {
+    staffTabInput.value = selectedValue;
+  }
 }
 
 function renderPreview(rows, problems) {
