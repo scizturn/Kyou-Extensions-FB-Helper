@@ -1,4 +1,4 @@
-import { canUsePreparedRows, isMissingContentScriptError } from "./lib.js";
+import { canUsePreparedRows, isMissingContentScriptError, normalizeWarnings } from "./lib.js";
 
 const itemIdsInput = document.querySelector("#itemIds");
 const previewButton = document.querySelector("#previewButton");
@@ -61,13 +61,13 @@ async function previewItems() {
 
     if (!response?.ok) {
       preparedRows = response?.rows || [];
-      renderPreview(preparedRows, response?.problems || []);
+      renderPreview(preparedRows, response?.problems || [], response?.warnings || []);
       setStatus(response?.error || "Failed to prepare items.", true);
       return;
     }
 
     preparedRows = response.rows;
-    renderPreview(preparedRows, []);
+    renderPreview(preparedRows, [], response.warnings || []);
     if (response.jobState) {
       renderJobState(response.jobState);
     }
@@ -237,8 +237,14 @@ function renderStaffTabs(staffTabs, selectedValue) {
   }
 }
 
-function renderPreview(rows, problems) {
+function renderPreview(rows, problems, warnings = []) {
   previewEl.textContent = "";
+  for (const warning of normalizeWarnings(warnings)) {
+    const line = document.createElement("div");
+    line.className = "warning";
+    line.textContent = warning;
+    previewEl.append(line);
+  }
   for (const row of rows) {
     const item = document.createElement("article");
     item.className = "item";

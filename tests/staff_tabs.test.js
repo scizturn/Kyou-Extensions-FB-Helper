@@ -1,7 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildDownloadFilename, isMissingContentScriptError, normalizeStaffTabOptions } from "../src/lib.js";
+import {
+  buildDownloadFilename,
+  isMissingContentScriptError,
+  normalizeStaffTabOptions,
+  normalizeWarnings,
+} from "../src/lib.js";
 
 test("normalizeStaffTabOptions keeps valid label and value pairs", () => {
   assert.deepEqual(
@@ -34,4 +39,11 @@ test("buildDownloadFilename keeps item order and stable extension", () => {
     buildDownloadFilename({ itemId: "118147", imageUrl: "https://cdn.example/no-ext" }, 1),
     "kyou-fb-upload/002-118147.jpg",
   );
+});
+
+test("normalizeWarnings keeps non-empty string warnings", () => {
+  assert.deepEqual(normalizeWarnings(["Removed DB NO EXIST: 112549", "", null, "Shelving rank unavailable"]), [
+    "Removed DB NO EXIST: 112549",
+    "Shelving rank unavailable",
+  ]);
 });

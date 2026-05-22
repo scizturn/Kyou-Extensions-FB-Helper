@@ -107,6 +107,13 @@ export function normalizeStaffTabOptions(options) {
     .filter((option) => option.value);
 }
 
+export function normalizeWarnings(warnings) {
+  if (!Array.isArray(warnings)) {
+    return [];
+  }
+  return warnings.map((warning) => String(warning || "").trim()).filter(Boolean);
+}
+
 export function isMissingContentScriptError(error) {
   return String(error?.message || error || "")
     .toLowerCase()
