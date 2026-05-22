@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  buildDownloadRequest,
   buildDownloadFilename,
   isMissingContentScriptError,
   normalizeStaffTabOptions,
@@ -42,6 +43,18 @@ test("buildDownloadFilename keeps item order and stable extension", () => {
   assert.equal(
     buildDownloadFilename({ itemId: "123456", status: "", imageUrl: "https://cdn.example/no-ext" }, 2),
     "kyou-fb-upload/003-NA-123456.jpg",
+  );
+});
+
+test("buildDownloadRequest forces stable filenames for repeat downloads", () => {
+  assert.deepEqual(
+    buildDownloadRequest({ itemId: "182534", status: "RS", imageUrl: "https://cdn.example/miku.jpg" }, 0),
+    {
+      url: "https://cdn.example/miku.jpg",
+      filename: "kyou-fb-upload/001-RS-182534.jpg",
+      conflictAction: "overwrite",
+      saveAs: false,
+    },
   );
 });
 

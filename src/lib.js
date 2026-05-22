@@ -131,6 +131,15 @@ export function buildDownloadFilename(row, index) {
   return `kyou-fb-upload/${order}-${status}-${itemId}.${extension}`;
 }
 
+export function buildDownloadRequest(row, index) {
+  return {
+    url: row.imageUrl,
+    filename: buildDownloadFilename(row, index),
+    conflictAction: "overwrite",
+    saveAs: false,
+  };
+}
+
 export async function fetchKyouItems(itemIds, fetchImpl = fetch) {
   const rows = [];
   for (const itemId of itemIds) {

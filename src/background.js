@@ -1,5 +1,5 @@
 import {
-  buildDownloadFilename,
+  buildDownloadRequest,
   createJobState,
   normalizeStaffTabOptions,
   parseItemIds,
@@ -149,12 +149,7 @@ async function downloadImages(rows) {
   const downloadIds = [];
   for (let index = 0; index < rows.length; index += 1) {
     const row = rows[index];
-    const downloadId = await chrome.downloads.download({
-      url: row.imageUrl,
-      filename: buildDownloadFilename(row, index),
-      conflictAction: "uniquify",
-      saveAs: false,
-    });
+    const downloadId = await chrome.downloads.download(buildDownloadRequest(row, index));
     downloadIds.push(downloadId);
   }
   await mergeJobState({ status: "images_downloaded", currentIndex: rows.length, error: "" });
