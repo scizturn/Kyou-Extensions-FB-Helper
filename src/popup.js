@@ -1,3 +1,5 @@
+import { isMissingContentScriptError } from "./lib.js";
+
 const itemIdsInput = document.querySelector("#itemIds");
 const previewButton = document.querySelector("#previewButton");
 const fillButton = document.querySelector("#fillButton");
@@ -91,10 +93,7 @@ async function fillFacebook() {
       type: "UPDATE_JOB_STATE",
       patch: { status: "uploading", currentIndex: 0, error: "" },
     });
-    const response = await chrome.tabs.sendMessage(tab.id, {
-      type: "FB_HELPER_FILL_ALBUM",
-      rows: preparedRows,
-    });
+    const response = await sendFillMessage(tab.id, preparedRows);
 
     if (!response?.ok) {
       await chrome.runtime.sendMessage({
@@ -109,8 +108,37 @@ async function fillFacebook() {
       patch: { status: "done", currentIndex: preparedRows.length, error: "" },
     });
     setStatus(response.message || "Facebook fields filled. Review before saving.");
+  } catch (error) {
+    const message = error.message || String(error);
+    await chrome.runtime.sendMessage({
+      type: "UPDATE_JOB_STATE",
+      patch: { status: "error", error: message },
+    });
+    setStatus(message, true);
   } finally {
     clearLoading();
+  }
+}
+
+async function sendFillMessage(tabId, rows) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, {
+      type: "FB_HELPER_FILL_ALBUM",
+      rows,
+    });
+  } catch (error) {
+    if (!isMissingContentScriptError(error)) {
+      throw error;
+    }
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["src/content.js"],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    return chrome.tabs.sendMessage(tabId, {
+      type: "FB_HELPER_FILL_ALBUM",
+      rows,
+    });
   }
 }
 

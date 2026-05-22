@@ -103,6 +103,12 @@ export function normalizeStaffTabOptions(options) {
     .filter((option) => option.value);
 }
 
+export function isMissingContentScriptError(error) {
+  return String(error?.message || error || "")
+    .toLowerCase()
+    .includes("receiving end does not exist");
+}
+
 export async function fetchKyouItems(itemIds, fetchImpl = fetch) {
   const rows = [];
   for (const itemId of itemIds) {
