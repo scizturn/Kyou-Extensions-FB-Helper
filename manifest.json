@@ -26,6 +26,7 @@
     "https://kyou.id/*",
     "https://www.kyou.id/*",
     "https://*/*",
+    "http://*/*",
     "https://*.fbcdn.net/*",
     "https://*.facebook.com/*",
     "https://www.facebook.com/*",

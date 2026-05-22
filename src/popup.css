@@ -40,8 +40,23 @@ label {
   font-weight: 650;
 }
 
+details {
+  margin-bottom: 12px;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #ffffff;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+input,
 textarea {
   width: 100%;
+  margin-bottom: 10px;
   resize: vertical;
   border: 1px solid #d0d7de;
   border-radius: 8px;
@@ -66,14 +81,20 @@ button {
   cursor: pointer;
 }
 
-button:first-child {
+#previewButton {
   color: #ffffff;
   background: #0969da;
 }
 
-button:last-child {
+#fillButton {
   color: #ffffff;
   background: #1a7f37;
+}
+
+#clearButton {
+  grid-column: 1 / -1;
+  color: #24292f;
+  background: #d8dee4;
 }
 
 button:disabled {

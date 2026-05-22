@@ -13,12 +13,24 @@
         <span id="pageState">Album page required</span>
       </header>
 
+      <details>
+        <summary>Furina settings</summary>
+        <label for="furinaBaseUrl">Furina URL</label>
+        <input id="furinaBaseUrl" type="url" placeholder="https://furina.example.com">
+        <label for="furinaToken">Extension token</label>
+        <input id="furinaToken" type="password" placeholder="Shared token from Furina .env">
+      </details>
+
+      <label for="staffTab">Staff tab</label>
+      <input id="staffTab" type="text" placeholder="FB - Helper - REGA">
+
       <label for="itemIds">Item IDs</label>
       <textarea id="itemIds" rows="8" placeholder="112549&#10;169575&#10;https://kyou.id/items/156998"></textarea>
 
       <div class="actions">
         <button id="previewButton" type="button">Preview</button>
         <button id="fillButton" type="button" disabled>Fill Facebook</button>
+        <button id="clearButton" type="button">Clear saved job</button>
       </div>
 
       <section id="status" aria-live="polite"></section>

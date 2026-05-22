@@ -1,29 +1,42 @@
 const itemIdsInput = document.querySelector("#itemIds");
 const previewButton = document.querySelector("#previewButton");
 const fillButton = document.querySelector("#fillButton");
+const clearButton = document.querySelector("#clearButton");
 const statusEl = document.querySelector("#status");
 const previewEl = document.querySelector("#preview");
 const pageStateEl = document.querySelector("#pageState");
+const furinaBaseUrlInput = document.querySelector("#furinaBaseUrl");
+const furinaTokenInput = document.querySelector("#furinaToken");
+const staffTabInput = document.querySelector("#staffTab");
 
 let preparedRows = [];
 
 init();
 
 async function init() {
-  const saved = await chrome.storage.local.get(["itemIds"]);
+  const saved = await chrome.storage.local.get(["itemIds", "furinaBaseUrl", "furinaToken", "staffTab"]);
   itemIdsInput.value = saved.itemIds || "";
+  furinaBaseUrlInput.value = saved.furinaBaseUrl || "";
+  furinaTokenInput.value = saved.furinaToken || "";
+  staffTabInput.value = saved.staffTab || "";
+
   itemIdsInput.addEventListener("input", () => {
     chrome.storage.local.set({ itemIds: itemIdsInput.value });
     preparedRows = [];
     fillButton.disabled = true;
     previewEl.textContent = "";
   });
+  furinaBaseUrlInput.addEventListener("input", saveSettings);
+  furinaTokenInput.addEventListener("input", saveSettings);
+  staffTabInput.addEventListener("input", saveSettings);
 
   previewButton.addEventListener("click", previewItems);
   fillButton.addEventListener("click", fillFacebook);
+  clearButton.addEventListener("click", clearSavedJob);
 
   const tab = await getActiveTab();
   pageStateEl.textContent = isFacebookTab(tab) ? "Facebook tab detected" : "Open Facebook album first";
+  await restoreSavedJob();
 }
 
 async function previewItems() {
@@ -35,6 +48,7 @@ async function previewItems() {
     const response = await chrome.runtime.sendMessage({
       type: "PREPARE_KYOU_ITEMS",
       rawItemIds: itemIdsInput.value,
+      tabName: staffTabInput.value.trim(),
     });
 
     if (!response?.ok) {
@@ -46,6 +60,9 @@ async function previewItems() {
 
     preparedRows = response.rows;
     renderPreview(preparedRows, []);
+    if (response.jobState) {
+      renderJobState(response.jobState);
+    }
     setStatus(`${preparedRows.length} items ready.`);
   } finally {
     clearLoading();
@@ -67,19 +84,68 @@ async function fillFacebook() {
   }
 
   try {
+    await chrome.runtime.sendMessage({
+      type: "UPDATE_JOB_STATE",
+      patch: { status: "uploading", currentIndex: 0, error: "" },
+    });
     const response = await chrome.tabs.sendMessage(tab.id, {
       type: "FB_HELPER_FILL_ALBUM",
       rows: preparedRows,
     });
 
     if (!response?.ok) {
+      await chrome.runtime.sendMessage({
+        type: "UPDATE_JOB_STATE",
+        patch: { status: "error", error: response?.error || "Facebook fill failed." },
+      });
       setStatus(response?.error || "Facebook fill failed.", true);
       return;
     }
+    await chrome.runtime.sendMessage({
+      type: "UPDATE_JOB_STATE",
+      patch: { status: "done", currentIndex: preparedRows.length, error: "" },
+    });
     setStatus(response.message || "Facebook fields filled. Review before saving.");
   } finally {
     clearLoading();
   }
+}
+
+async function restoreSavedJob() {
+  const response = await chrome.runtime.sendMessage({ type: "GET_JOB_STATE" });
+  const jobState = response?.jobState;
+  if (!jobState) {
+    return;
+  }
+  preparedRows = jobState.rows || [];
+  renderPreview(preparedRows, []);
+  renderJobState(jobState);
+}
+
+function renderJobState(jobState) {
+  if (!jobState) {
+    return;
+  }
+  const total = jobState.rows?.length || 0;
+  const progress = total ? ` ${jobState.currentIndex || 0}/${total}` : "";
+  const suffix = jobState.error ? ` - ${jobState.error}` : "";
+  setStatus(`Saved job: ${jobState.status}${progress}${suffix}`, jobState.status === "error");
+}
+
+async function clearSavedJob() {
+  await chrome.runtime.sendMessage({ type: "CLEAR_JOB_STATE" });
+  preparedRows = [];
+  fillButton.disabled = true;
+  previewEl.textContent = "";
+  setStatus("Saved job cleared.");
+}
+
+function saveSettings() {
+  chrome.storage.local.set({
+    furinaBaseUrl: furinaBaseUrlInput.value.trim(),
+    furinaToken: furinaTokenInput.value,
+    staffTab: staffTabInput.value.trim(),
+  });
 }
 
 function renderPreview(rows, problems) {

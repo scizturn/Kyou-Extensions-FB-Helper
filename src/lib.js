@@ -70,6 +70,26 @@ export function validateRows(rows) {
   return { ready, problems };
 }
 
+export function createJobState({ itemIds, rows }, now = new Date().toISOString()) {
+  return {
+    jobId: now,
+    status: "preview_ready",
+    itemIds: [...itemIds],
+    rows: [...rows],
+    currentIndex: 0,
+    error: "",
+    updatedAt: now,
+  };
+}
+
+export function updateJobState(state, patch, now = new Date().toISOString()) {
+  return {
+    ...state,
+    ...patch,
+    updatedAt: now,
+  };
+}
+
 export async function fetchKyouItems(itemIds, fetchImpl = fetch) {
   const rows = [];
   for (const itemId of itemIds) {

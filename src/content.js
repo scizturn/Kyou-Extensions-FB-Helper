@@ -17,7 +17,12 @@ async function fillAlbum(rows) {
   }
 
   const input = await findOrOpenFileInput();
-  const files = await Promise.all(rows.map(rowToFile));
+  await updateJob({ status: "downloading", currentIndex: 0, error: "" });
+  const files = [];
+  for (let index = 0; index < rows.length; index += 1) {
+    files.push(await rowToFile(rows[index]));
+    await updateJob({ status: "downloading", currentIndex: index + 1 });
+  }
   const transfer = new DataTransfer();
   for (const file of files) {
     transfer.items.add(file);
@@ -27,13 +32,23 @@ async function fillAlbum(rows) {
   input.dispatchEvent(new Event("input", { bubbles: true }));
   input.dispatchEvent(new Event("change", { bubbles: true }));
 
+  await updateJob({ status: "caption_filling", currentIndex: 0 });
   const fields = await waitForCaptionFields(rows.length);
   fillCaptionFields(fields, rows);
+  await updateJob({ status: "done", currentIndex: Math.min(fields.length, rows.length), error: "" });
 
   return {
     ok: true,
     message: `Uploaded ${files.length} image files and filled ${Math.min(fields.length, rows.length)} captions. Review before saving.`,
   };
+}
+
+async function updateJob(patch) {
+  try {
+    await chrome.runtime.sendMessage({ type: "UPDATE_JOB_STATE", patch });
+  } catch {
+    // The Facebook fill should continue even if state update fails.
+  }
 }
 
 async function findOrOpenFileInput() {
