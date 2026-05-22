@@ -32,12 +32,16 @@ test("isMissingContentScriptError detects Chrome missing receiver errors", () =>
 
 test("buildDownloadFilename keeps item order and stable extension", () => {
   assert.equal(
-    buildDownloadFilename({ itemId: "182534", imageUrl: "https://cdn.example/miku.webp?x=1" }, 0),
-    "kyou-fb-upload/001-182534.webp",
+    buildDownloadFilename({ itemId: "182534", status: "RS", imageUrl: "https://cdn.example/miku.webp?x=1" }, 0),
+    "kyou-fb-upload/001-RS-182534.webp",
   );
   assert.equal(
-    buildDownloadFilename({ itemId: "118147", imageUrl: "https://cdn.example/no-ext" }, 1),
-    "kyou-fb-upload/002-118147.jpg",
+    buildDownloadFilename({ itemId: "118147", status: "PO", imageUrl: "https://cdn.example/no-ext" }, 1),
+    "kyou-fb-upload/002-PO-118147.jpg",
+  );
+  assert.equal(
+    buildDownloadFilename({ itemId: "123456", status: "", imageUrl: "https://cdn.example/no-ext" }, 2),
+    "kyou-fb-upload/003-NA-123456.jpg",
   );
 });
 

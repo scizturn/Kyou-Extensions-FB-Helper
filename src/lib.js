@@ -122,9 +122,13 @@ export function isMissingContentScriptError(error) {
 
 export function buildDownloadFilename(row, index) {
   const order = String(index + 1).padStart(3, "0");
+  const status = String(row?.status || "NA")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, "") || "NA";
   const itemId = String(row?.itemId || "item").replace(/[^a-z0-9_-]/gi, "");
   const extension = extensionFromUrl(row?.imageUrl) || "jpg";
-  return `kyou-fb-upload/${order}-${itemId}.${extension}`;
+  return `kyou-fb-upload/${order}-${status}-${itemId}.${extension}`;
 }
 
 export async function fetchKyouItems(itemIds, fetchImpl = fetch) {
