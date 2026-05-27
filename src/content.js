@@ -18,6 +18,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true;
 });
 
+const DEFAULT_CAPTION_FILL_DELAY_MS = 750;
+
 async function fillVisibleCaptions(rows) {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("No prepared rows received.");
@@ -30,7 +32,10 @@ async function fillVisibleCaptions(rows) {
       `Could not find enough empty Facebook description fields. Found ${fields.length}/${rows.length}. Upload the downloaded images first, then try Fill captions.`,
     );
   }
-  fillCaptionFields(fields, rows);
+  await fillCaptionFields(fields, rows, {
+    delayMs: DEFAULT_CAPTION_FILL_DELAY_MS,
+    onProgress: (currentIndex) => updateJob({ status: "caption_filling", currentIndex }),
+  });
   await updateJob({ status: "done", currentIndex: rows.length, error: "" });
 
   return {
@@ -86,10 +91,18 @@ function isAlbumGridTextField(node) {
   return rect.left > 320 && rect.top > 40 && rect.width >= 120 && rect.height >= 30;
 }
 
-function fillCaptionFields(fields, rows) {
+async function fillCaptionFields(fields, rows, options = {}) {
   const count = Math.min(fields.length, rows.length);
+  const delayMs = Number.isFinite(options.delayMs) ? options.delayMs : DEFAULT_CAPTION_FILL_DELAY_MS;
+  const wait = options.wait || sleep;
   for (let index = 0; index < count; index += 1) {
+    fields[index].scrollIntoView?.({ block: "center", inline: "nearest" });
     setEditableValue(fields[index], rows[index].caption);
+    fields[index].blur?.();
+    await options.onProgress?.(index + 1);
+    if (index < count - 1 && delayMs > 0) {
+      await wait(delayMs);
+    }
   }
 }
 
@@ -104,13 +117,30 @@ function editableValue(node) {
 function setEditableValue(node, value) {
   node.focus();
   if ("value" in node) {
-    node.value = value;
+    setNativeValue(node, value);
   } else {
     node.textContent = value;
   }
-  node.dispatchEvent(new InputEvent("beforeinput", { bubbles: true, inputType: "insertText", data: value }));
-  node.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
+  node.dispatchEvent(createTextInputEvent("beforeinput", value));
+  node.dispatchEvent(createTextInputEvent("input", value));
   node.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
+function setNativeValue(node, value) {
+  const prototype = Object.getPrototypeOf(node);
+  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  if (setter) {
+    setter.call(node, value);
+  } else {
+    node.value = value;
+  }
+}
+
+function createTextInputEvent(type, value) {
+  if (typeof InputEvent === "function") {
+    return new InputEvent(type, { bubbles: true, inputType: "insertText", data: value });
+  }
+  return new Event(type, { bubbles: true });
 }
 
 function findButtonByText(labels) {
@@ -153,4 +183,12 @@ async function waitFor(fn, timeoutMs) {
     await new Promise((resolve) => setTimeout(resolve, 300));
   }
   return null;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+if (typeof process !== "undefined" && process.env?.NODE_ENV === "test") {
+  globalThis.__fbHelperTestApi = { fillCaptionFields };
 }
