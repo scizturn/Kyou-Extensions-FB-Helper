@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  buildDownloadRequest,
   buildDownloadFilename,
   isMissingContentScriptError,
   normalizeStaffTabOptions,
@@ -32,29 +31,19 @@ test("isMissingContentScriptError detects Chrome missing receiver errors", () =>
 });
 
 test("buildDownloadFilename keeps item order and stable extension", () => {
+  // Native folder picker (showDirectoryPicker) writes into a user-chosen dir, so the
+  // filename is a bare name without the old "kyou-fb-upload/" download-path prefix.
   assert.equal(
     buildDownloadFilename({ itemId: "182534", status: "RS", imageUrl: "https://cdn.example/miku.webp?x=1" }, 0),
-    "kyou-fb-upload/001-RS-182534.webp",
+    "001-RS-182534.webp",
   );
   assert.equal(
     buildDownloadFilename({ itemId: "118147", status: "PO", imageUrl: "https://cdn.example/no-ext" }, 1),
-    "kyou-fb-upload/002-PO-118147.jpg",
+    "002-PO-118147.jpg",
   );
   assert.equal(
     buildDownloadFilename({ itemId: "123456", status: "", imageUrl: "https://cdn.example/no-ext" }, 2),
-    "kyou-fb-upload/003-NA-123456.jpg",
-  );
-});
-
-test("buildDownloadRequest forces stable filenames for repeat downloads", () => {
-  assert.deepEqual(
-    buildDownloadRequest({ itemId: "182534", status: "RS", imageUrl: "https://cdn.example/miku.jpg" }, 0),
-    {
-      url: "https://cdn.example/miku.jpg",
-      filename: "kyou-fb-upload/001-RS-182534.jpg",
-      conflictAction: "overwrite",
-      saveAs: false,
-    },
+    "003-NA-123456.jpg",
   );
 });
 

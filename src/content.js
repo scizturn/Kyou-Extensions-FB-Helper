@@ -10,7 +10,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
-  fillVisibleCaptions(message.rows)
+  fillVisibleCaptions(message.rows, message.mode)
     .then(sendResponse)
     .catch((error) => {
       sendResponse({ ok: false, error: error.message || String(error) });
@@ -20,12 +20,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 const DEFAULT_CAPTION_FILL_DELAY_MS = 750;
 
-async function fillVisibleCaptions(rows) {
+async function fillVisibleCaptions(rows, mode) {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("No prepared rows received.");
   }
 
-  await updateJob({ status: "caption_filling", currentIndex: 0 });
+  await updateJob({ status: "caption_filling", currentIndex: 0 }, mode);
   const fields = await waitForEmptyCaptionFields(rows.length);
   if (fields.length < rows.length) {
     throw new Error(
@@ -34,9 +34,9 @@ async function fillVisibleCaptions(rows) {
   }
   await fillCaptionFields(fields, rows, {
     delayMs: DEFAULT_CAPTION_FILL_DELAY_MS,
-    onProgress: (currentIndex) => updateJob({ status: "caption_filling", currentIndex }),
+    onProgress: (currentIndex) => updateJob({ status: "caption_filling", currentIndex }, mode),
   });
-  await updateJob({ status: "done", currentIndex: rows.length, error: "" });
+  await updateJob({ status: "done", currentIndex: rows.length, error: "" }, mode);
 
   return {
     ok: true,
@@ -44,9 +44,9 @@ async function fillVisibleCaptions(rows) {
   };
 }
 
-async function updateJob(patch) {
+async function updateJob(patch, mode) {
   try {
-    await chrome.runtime.sendMessage({ type: "UPDATE_JOB_STATE", patch });
+    await chrome.runtime.sendMessage({ type: "UPDATE_JOB_STATE", patch, mode });
   } catch {
     // The Facebook fill should continue even if state update fails.
   }

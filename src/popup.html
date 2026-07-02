@@ -13,6 +13,11 @@
         <span id="pageState">Album page required</span>
       </header>
 
+      <nav class="mode-tabs" role="tablist" aria-label="Upload mode">
+        <button id="modeDailyTab" class="mode-tab is-active" type="button" role="tab" data-mode="daily">Daily</button>
+        <button id="modeSpecialTab" class="mode-tab" type="button" role="tab" data-mode="special">Special Sale</button>
+      </nav>
+
       <details>
         <summary>Furina settings</summary>
         <label for="furinaBaseUrl">Furina URL</label>
@@ -21,10 +26,18 @@
         <input id="furinaToken" type="password" placeholder="Shared token from Furina .env">
       </details>
 
-      <label for="staffTab">Staff tab</label>
-      <select id="staffTab">
-        <option value="">Set Furina settings, then choose helper</option>
+      <label for="dataSource">Data source</label>
+      <select id="dataSource">
+        <option value="sheet">Sheet (helper tab)</option>
+        <option value="metabase">Metabase (langsung dari DB)</option>
       </select>
+
+      <div id="staffTabRow">
+        <label for="staffTab">Staff tab</label>
+        <select id="staffTab">
+          <option value="">Set Furina settings, then choose helper</option>
+        </select>
+      </div>
 
       <label for="itemIds">Item IDs</label>
       <textarea id="itemIds" rows="8" placeholder="112549&#10;169575&#10;https://kyou.id/items/156998"></textarea>

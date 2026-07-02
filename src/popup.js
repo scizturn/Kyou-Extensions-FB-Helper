@@ -12,38 +12,119 @@ const pageStateEl = document.querySelector("#pageState");
 const furinaBaseUrlInput = document.querySelector("#furinaBaseUrl");
 const furinaTokenInput = document.querySelector("#furinaToken");
 const staffTabInput = document.querySelector("#staffTab");
+const staffTabRow = document.querySelector("#staffTabRow");
+const dataSourceInput = document.querySelector("#dataSource");
+const modeTabButtons = [...document.querySelectorAll(".mode-tab")];
 
-let preparedRows = [];
+// Metabase pulls item data straight from the DB (no staff tab); Sheet uses the
+// helper-tab formulas. Default to Sheet so the update keeps the legacy behavior
+// until a user explicitly switches the source.
+const DEFAULT_DATA_SOURCE = "sheet";
+
+// Daily and Special Sale run the identical flow but keep separate inputs and saved
+// jobs. Daily reuses the legacy storage keys so existing drafts survive; Special Sale
+// gets suffixed keys. Furina settings and the staff-tab option list stay shared.
+const MODES = {
+  daily: { label: "Daily" },
+  special: { label: "Special Sale" },
+};
+
+const modeState = {
+  daily: { preparedRows: [] },
+  special: { preparedRows: [] },
+};
+
+let activeMode = "daily";
+
+function current() {
+  return modeState[activeMode];
+}
+
+function itemIdsKey(mode) {
+  return mode === "special" ? "itemIds:special" : "itemIds";
+}
+
+function staffTabKey(mode) {
+  return mode === "special" ? "staffTab:special" : "staffTab";
+}
+
+function dataSourceKey(mode) {
+  return mode === "special" ? "dataSource:special" : "dataSource";
+}
+
+function currentDataSource() {
+  return dataSourceInput.value === "sheet" ? "sheet" : "metabase";
+}
+
+// Staff tab only matters for the Sheet source; hide it when Metabase is selected.
+function applyDataSourceUI() {
+  staffTabRow.hidden = currentDataSource() !== "sheet";
+}
 
 init();
 
 async function init() {
-  const saved = await chrome.storage.local.get(["itemIds", "furinaBaseUrl", "furinaToken", "staffTab"]);
-  itemIdsInput.value = saved.itemIds || "";
+  const saved = await chrome.storage.local.get(["furinaBaseUrl", "furinaToken"]);
   furinaBaseUrlInput.value = saved.furinaBaseUrl || "";
   furinaTokenInput.value = saved.furinaToken || "";
-  staffTabInput.value = saved.staffTab || "";
 
   itemIdsInput.addEventListener("input", () => {
-    chrome.storage.local.set({ itemIds: itemIdsInput.value });
-    preparedRows = [];
+    chrome.storage.local.set({ [itemIdsKey(activeMode)]: itemIdsInput.value });
+    current().preparedRows = [];
     downloadButton.disabled = true;
     fillButton.disabled = true;
     previewEl.textContent = "";
   });
-  furinaBaseUrlInput.addEventListener("input", saveSettings);
-  furinaTokenInput.addEventListener("input", saveSettings);
-  staffTabInput.addEventListener("change", saveSettings);
+  furinaBaseUrlInput.addEventListener("input", saveFurinaSettings);
+  furinaTokenInput.addEventListener("input", saveFurinaSettings);
+  staffTabInput.addEventListener("change", () => {
+    chrome.storage.local.set({ [staffTabKey(activeMode)]: staffTabInput.value });
+  });
+  dataSourceInput.addEventListener("change", () => {
+    chrome.storage.local.set({ [dataSourceKey(activeMode)]: currentDataSource() });
+    applyDataSourceUI();
+  });
 
   previewButton.addEventListener("click", previewItems);
   downloadButton.addEventListener("click", downloadImages);
   fillButton.addEventListener("click", fillFacebook);
   clearButton.addEventListener("click", clearSavedJob);
   refreshTabsButton.addEventListener("click", loadStaffTabs);
+  for (const button of modeTabButtons) {
+    button.addEventListener("click", () => switchMode(button.dataset.mode));
+  }
 
   const tab = await getActiveTab();
   pageStateEl.textContent = isFacebookTab(tab) ? "Facebook tab detected" : "Open Facebook album first";
   await loadStaffTabs();
+  await loadMode(activeMode);
+}
+
+async function switchMode(mode) {
+  if (!MODES[mode] || mode === activeMode) {
+    return;
+  }
+  activeMode = mode;
+  for (const button of modeTabButtons) {
+    button.classList.toggle("is-active", button.dataset.mode === mode);
+  }
+  await loadMode(mode);
+}
+
+async function loadMode(mode) {
+  const saved = await chrome.storage.local.get([itemIdsKey(mode), staffTabKey(mode), dataSourceKey(mode)]);
+  itemIdsInput.value = saved[itemIdsKey(mode)] || "";
+
+  const desiredTab = saved[staffTabKey(mode)] || "";
+  staffTabInput.value = [...staffTabInput.options].some((option) => option.value === desiredTab)
+    ? desiredTab
+    : "";
+
+  dataSourceInput.value = saved[dataSourceKey(mode)] === "sheet" ? "sheet" : DEFAULT_DATA_SOURCE;
+  applyDataSourceUI();
+
+  previewEl.textContent = "";
+  setStatus("");
   await restoreSavedJob();
 }
 
@@ -55,30 +136,32 @@ async function previewItems() {
   try {
     const response = await chrome.runtime.sendMessage({
       type: "PREPARE_KYOU_ITEMS",
+      mode: activeMode,
+      dataSource: currentDataSource(),
       rawItemIds: itemIdsInput.value,
       tabName: staffTabInput.value.trim(),
     });
 
     if (!response?.ok) {
-      preparedRows = response?.rows || [];
-      renderPreview(preparedRows, response?.problems || [], response?.warnings || []);
+      current().preparedRows = response?.rows || [];
+      renderPreview(current().preparedRows, response?.problems || [], response?.warnings || []);
       setStatus(response?.error || "Failed to prepare items.", true);
       return;
     }
 
-    preparedRows = response.rows;
-    renderPreview(preparedRows, [], response.warnings || []);
+    current().preparedRows = response.rows;
+    renderPreview(current().preparedRows, [], response.warnings || []);
     if (response.jobState) {
       renderJobState(response.jobState);
     }
-    setStatus(`${preparedRows.length} items ready.`);
+    setStatus(`${current().preparedRows.length} items ready.`);
   } finally {
     clearLoading();
   }
 }
 
 async function fillFacebook() {
-  if (!preparedRows.length) {
+  if (!current().preparedRows.length) {
     setStatus("Preview items first.", true);
     return;
   }
@@ -94,13 +177,15 @@ async function fillFacebook() {
   try {
     await chrome.runtime.sendMessage({
       type: "UPDATE_JOB_STATE",
+      mode: activeMode,
       patch: { status: "caption_filling", currentIndex: 0, error: "" },
     });
-    const response = await sendFillMessage(tab.id, preparedRows);
+    const response = await sendFillMessage(tab.id, current().preparedRows);
 
     if (!response?.ok) {
       await chrome.runtime.sendMessage({
         type: "UPDATE_JOB_STATE",
+        mode: activeMode,
         patch: { status: "error", error: response?.error || "Facebook fill failed." },
       });
       setStatus(response?.error || "Facebook fill failed.", true);
@@ -108,13 +193,15 @@ async function fillFacebook() {
     }
     await chrome.runtime.sendMessage({
       type: "UPDATE_JOB_STATE",
-      patch: { status: "done", currentIndex: preparedRows.length, error: "" },
+      mode: activeMode,
+      patch: { status: "done", currentIndex: current().preparedRows.length, error: "" },
     });
     setStatus(response.message || "Facebook fields filled. Review before saving.");
   } catch (error) {
     const message = error.message || String(error);
     await chrome.runtime.sendMessage({
       type: "UPDATE_JOB_STATE",
+      mode: activeMode,
       patch: { status: "error", error: message },
     });
     setStatus(message, true);
@@ -124,11 +211,9 @@ async function fillFacebook() {
 }
 
 async function sendFillMessage(tabId, rows) {
+  const message = { type: "FB_HELPER_FILL_CAPTIONS", mode: activeMode, rows };
   try {
-    return await chrome.tabs.sendMessage(tabId, {
-      type: "FB_HELPER_FILL_CAPTIONS",
-      rows,
-    });
+    return await chrome.tabs.sendMessage(tabId, message);
   } catch (error) {
     if (!isMissingContentScriptError(error)) {
       throw error;
@@ -138,15 +223,12 @@ async function sendFillMessage(tabId, rows) {
       files: ["src/content.js"],
     });
     await new Promise((resolve) => setTimeout(resolve, 300));
-    return chrome.tabs.sendMessage(tabId, {
-      type: "FB_HELPER_FILL_CAPTIONS",
-      rows,
-    });
+    return chrome.tabs.sendMessage(tabId, message);
   }
 }
 
 async function downloadImages() {
-  if (!preparedRows.length) {
+  if (!current().preparedRows.length) {
     setStatus("Preview items first.", true);
     return;
   }
@@ -165,9 +247,10 @@ async function downloadImages() {
 
   setLoading("Downloading images...");
   try {
+    const rows = current().preparedRows;
     let successCount = 0;
-    for (let index = 0; index < preparedRows.length; index += 1) {
-      const row = preparedRows[index];
+    for (let index = 0; index < rows.length; index += 1) {
+      const row = rows[index];
       const filename = buildDownloadFilename(row, index, "");
       try {
         const response = await fetch(row.imageUrl);
@@ -182,12 +265,13 @@ async function downloadImages() {
         console.error(`Failed to download ${row.imageUrl}:`, err);
       }
     }
-    
+
     await chrome.runtime.sendMessage({
       type: "UPDATE_JOB_STATE",
-      patch: { status: "images_downloaded", currentIndex: preparedRows.length, error: "" },
+      mode: activeMode,
+      patch: { status: "images_downloaded", currentIndex: rows.length, error: "" },
     });
-    
+
     setStatus(`Downloaded ${successCount} images. Upload them manually in Facebook, then click Fill captions.`);
   } catch (error) {
     setStatus(error.message || "Download failed.", true);
@@ -197,13 +281,15 @@ async function downloadImages() {
 }
 
 async function restoreSavedJob() {
-  const response = await chrome.runtime.sendMessage({ type: "GET_JOB_STATE" });
+  const response = await chrome.runtime.sendMessage({ type: "GET_JOB_STATE", mode: activeMode });
   const jobState = response?.jobState;
   if (!jobState) {
+    current().preparedRows = [];
+    updateActionButtons();
     return;
   }
-  preparedRows = jobState.rows || [];
-  renderPreview(preparedRows, []);
+  current().preparedRows = jobState.rows || [];
+  renderPreview(current().preparedRows, []);
   renderJobState(jobState);
   updateActionButtons();
 }
@@ -219,19 +305,18 @@ function renderJobState(jobState) {
 }
 
 async function clearSavedJob() {
-  await chrome.runtime.sendMessage({ type: "CLEAR_JOB_STATE" });
-  preparedRows = [];
+  await chrome.runtime.sendMessage({ type: "CLEAR_JOB_STATE", mode: activeMode });
+  current().preparedRows = [];
   downloadButton.disabled = true;
   fillButton.disabled = true;
   previewEl.textContent = "";
   setStatus("Saved job cleared.");
 }
 
-function saveSettings() {
+function saveFurinaSettings() {
   chrome.storage.local.set({
     furinaBaseUrl: furinaBaseUrlInput.value.trim(),
     furinaToken: furinaTokenInput.value,
-    staffTab: staffTabInput.value,
   });
 }
 
@@ -312,7 +397,7 @@ function clearLoading() {
 }
 
 function updateActionButtons() {
-  const hasRows = canUsePreparedRows(preparedRows);
+  const hasRows = canUsePreparedRows(current().preparedRows);
   downloadButton.disabled = !hasRows;
   fillButton.disabled = !hasRows;
 }

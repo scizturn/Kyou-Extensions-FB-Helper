@@ -5,7 +5,13 @@ import {
   updateJobState,
 } from "./lib.js";
 
-const JOB_STATE_KEY = "fbHelperJobState";
+const JOB_STATE_KEY_BASE = "fbHelperJobState";
+
+// Daily keeps the legacy key so in-progress jobs survive the upgrade; Special Sale
+// gets its own suffixed key so the two modes never clobber each other.
+function jobStateKey(mode) {
+  return mode === "special" ? `${JOB_STATE_KEY_BASE}:special` : JOB_STATE_KEY_BASE;
+}
 
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
@@ -21,7 +27,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === "GET_JOB_STATE") {
-    getJobState().then(sendResponse);
+    getJobState(message.mode).then(sendResponse);
     return true;
   }
   if (message?.type === "GET_STAFF_TABS") {
@@ -33,11 +39,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message?.type === "UPDATE_JOB_STATE") {
-    mergeJobState(message.patch || {}).then(sendResponse);
+    mergeJobState(message.patch || {}, message.mode).then(sendResponse);
     return true;
   }
   if (message?.type === "CLEAR_JOB_STATE") {
-    chrome.storage.local.remove([JOB_STATE_KEY]).then(() => sendResponse({ ok: true }));
+    chrome.storage.local.remove([jobStateKey(message.mode)]).then(() => sendResponse({ ok: true }));
     return true;
   }
   return false;
@@ -56,20 +62,26 @@ async function prepareKyouItems(message) {
   if (!settings.furinaBaseUrl || !settings.furinaToken) {
     return { ok: false, error: "Set Furina URL and token first." };
   }
-  if (!message.tabName) {
+
+  // Metabase pulls data straight from the DB (no staff tab); Sheet uses the
+  // helper-tab formulas, so a staff tab must be chosen.
+  const useMetabase = message.dataSource !== "sheet";
+  if (!useMetabase && !message.tabName) {
     return { ok: false, error: "Choose a staff tab first." };
   }
 
-  const response = await fetch(`${settings.furinaBaseUrl}/fb-album-extension/prepare`, {
+  const endpoint = useMetabase ? "generate-caption" : "prepare";
+  const body = useMetabase
+    ? { itemIds: message.rawItemIds }
+    : { tabName: message.tabName, itemIds: message.rawItemIds };
+
+  const response = await fetch(`${settings.furinaBaseUrl}/fb-album-extension/${endpoint}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${settings.furinaToken}`,
     },
-    body: JSON.stringify({
-      tabName: message.tabName,
-      itemIds: message.rawItemIds,
-    }),
+    body: JSON.stringify(body),
   });
 
   let payload = null;
@@ -90,7 +102,7 @@ async function prepareKyouItems(message) {
   }
 
   const jobState = createJobState({ itemIds, rows: payload.rows });
-  await chrome.storage.local.set({ [JOB_STATE_KEY]: jobState });
+  await chrome.storage.local.set({ [jobStateKey(message.mode)]: jobState });
   return { ...payload, jobState };
 }
 
@@ -122,17 +134,18 @@ async function getSettings() {
   };
 }
 
-async function getJobState() {
-  const saved = await chrome.storage.local.get([JOB_STATE_KEY]);
-  return { ok: true, jobState: saved[JOB_STATE_KEY] || null };
+async function getJobState(mode) {
+  const key = jobStateKey(mode);
+  const saved = await chrome.storage.local.get([key]);
+  return { ok: true, jobState: saved[key] || null };
 }
 
-async function mergeJobState(patch) {
-  const current = (await getJobState()).jobState;
+async function mergeJobState(patch, mode) {
+  const current = (await getJobState(mode)).jobState;
   if (!current) {
     return { ok: false, error: "No job state found." };
   }
   const jobState = updateJobState(current, patch);
-  await chrome.storage.local.set({ [JOB_STATE_KEY]: jobState });
+  await chrome.storage.local.set({ [jobStateKey(mode)]: jobState });
   return { ok: true, jobState };
 }
