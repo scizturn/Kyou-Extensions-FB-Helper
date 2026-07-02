@@ -71,8 +71,9 @@ async function prepareKyouItems(message) {
   }
 
   const endpoint = useMetabase ? "generate-caption" : "prepare";
+  // Special Sale mode + Metabase → caption sale (harga normal + kuota promo + harga sale).
   const body = useMetabase
-    ? { itemIds: message.rawItemIds }
+    ? { itemIds: message.rawItemIds, sale: message.mode === "special" }
     : { tabName: message.tabName, itemIds: message.rawItemIds };
 
   const response = await fetch(`${settings.furinaBaseUrl}/fb-album-extension/${endpoint}`, {
