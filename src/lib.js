@@ -13,6 +13,47 @@ export function parseItemIds(raw) {
   return ids;
 }
 
+// Tab URLs are matched strictly (unlike parseItemIds, which scans free text) so
+// unrelated tabs that happen to carry long numbers never leak into the batch.
+const KYOU_ITEM_URL_RE = /^https?:\/\/(?:www\.)?kyou\.id\/items\/(\d{4,})(?:[/?#]|$)/i;
+
+export function parseKyouItemIdFromUrl(url) {
+  const match = String(url || "").trim().match(KYOU_ITEM_URL_RE);
+  return match ? match[1] : "";
+}
+
+// Keeps Chrome's tab order, which is the order staff opened the items in.
+export function collectItemTabs(tabs) {
+  const seen = new Set();
+  const found = [];
+  for (const tab of Array.isArray(tabs) ? tabs : []) {
+    const itemId = parseKyouItemIdFromUrl(tab?.url);
+    if (!itemId || seen.has(itemId)) {
+      continue;
+    }
+    seen.add(itemId);
+    found.push({ itemId, title: String(tab?.title || "").trim(), url: String(tab?.url || "") });
+  }
+  return found;
+}
+
+// Appends only the IDs the textarea does not list yet, leaving whatever the
+// staff typed (pasted URLs included) untouched.
+export function appendItemIds(existingRaw, newIds) {
+  const seen = new Set(parseItemIds(existingRaw));
+  const added = [];
+  for (const id of Array.isArray(newIds) ? newIds : []) {
+    const value = String(id || "").trim();
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    added.push(value);
+  }
+  const base = String(existingRaw || "").replace(/\s+$/, "");
+  return { text: [base, ...added].filter(Boolean).join("\n"), added };
+}
+
 export function buildKyouItemUrl(itemId) {
   return `https://kyou.id/items/${String(itemId).trim()}`;
 }

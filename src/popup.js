@@ -1,4 +1,11 @@
-import { buildDownloadFilename, canUsePreparedRows, isMissingContentScriptError, normalizeWarnings } from "./lib.js";
+import {
+  appendItemIds,
+  buildDownloadFilename,
+  canUsePreparedRows,
+  collectItemTabs,
+  isMissingContentScriptError,
+  normalizeWarnings,
+} from "./lib.js";
 
 const itemIdsInput = document.querySelector("#itemIds");
 const previewButton = document.querySelector("#previewButton");
@@ -15,6 +22,14 @@ const staffTabInput = document.querySelector("#staffTab");
 const staffTabRow = document.querySelector("#staffTabRow");
 const dataSourceInput = document.querySelector("#dataSource");
 const modeTabButtons = [...document.querySelectorAll(".mode-tab")];
+const uploadView = document.querySelector("#uploadView");
+const tabsView = document.querySelector("#tabsView");
+const tabsListEl = document.querySelector("#tabsList");
+const scanTabsButton = document.querySelector("#scanTabsButton");
+const copyTabIdsButton = document.querySelector("#copyTabIdsButton");
+const toggleTabIdsButton = document.querySelector("#toggleTabIdsButton");
+const addToDailyButton = document.querySelector("#addToDailyButton");
+const addToSpecialButton = document.querySelector("#addToSpecialButton");
 
 // Metabase pulls item data straight from the DB (no staff tab); Sheet uses the
 // helper-tab formulas. Default to Sheet so the update keeps the legacy behavior
@@ -34,7 +49,13 @@ const modeState = {
   special: { preparedRows: [] },
 };
 
+// Open Tabs is a tool tab, not an upload mode: it never runs the Furina flow, so
+// activeMode stays on the last upload mode while the tool is on screen.
+const TOOL_VIEW = "tabs";
+
+let activeView = "daily";
 let activeMode = "daily";
+let scannedItemTabs = [];
 
 function current() {
   return modeState[activeMode];
@@ -70,10 +91,7 @@ async function init() {
 
   itemIdsInput.addEventListener("input", () => {
     chrome.storage.local.set({ [itemIdsKey(activeMode)]: itemIdsInput.value });
-    current().preparedRows = [];
-    downloadButton.disabled = true;
-    fillButton.disabled = true;
-    previewEl.textContent = "";
+    resetPreparedRows();
   });
   furinaBaseUrlInput.addEventListener("input", saveFurinaSettings);
   furinaTokenInput.addEventListener("input", saveFurinaSettings);
@@ -90,8 +108,13 @@ async function init() {
   fillButton.addEventListener("click", fillFacebook);
   clearButton.addEventListener("click", clearSavedJob);
   refreshTabsButton.addEventListener("click", loadStaffTabs);
+  scanTabsButton.addEventListener("click", scanOpenTabs);
+  copyTabIdsButton.addEventListener("click", copySelectedTabIds);
+  toggleTabIdsButton.addEventListener("click", toggleAllTabIds);
+  addToDailyButton.addEventListener("click", () => addSelectedTabIdsTo("daily"));
+  addToSpecialButton.addEventListener("click", () => addSelectedTabIdsTo("special"));
   for (const button of modeTabButtons) {
-    button.addEventListener("click", () => switchMode(button.dataset.mode));
+    button.addEventListener("click", () => switchView(button.dataset.mode));
   }
 
   const tab = await getActiveTab();
@@ -100,15 +123,27 @@ async function init() {
   await loadMode(activeMode);
 }
 
-async function switchMode(mode) {
-  if (!MODES[mode] || mode === activeMode) {
+async function switchView(view) {
+  if (view === activeView || (view !== TOOL_VIEW && !MODES[view])) {
     return;
   }
-  activeMode = mode;
+  activeView = view;
   for (const button of modeTabButtons) {
-    button.classList.toggle("is-active", button.dataset.mode === mode);
+    button.classList.toggle("is-active", button.dataset.mode === view);
   }
-  await loadMode(mode);
+
+  const isTool = view === TOOL_VIEW;
+  uploadView.hidden = isTool;
+  tabsView.hidden = !isTool;
+  previewEl.hidden = isTool;
+  if (isTool) {
+    setStatus("");
+    await scanOpenTabs();
+    return;
+  }
+
+  activeMode = view;
+  await loadMode(view);
 }
 
 async function loadMode(mode) {
@@ -126,6 +161,113 @@ async function loadMode(mode) {
   previewEl.textContent = "";
   setStatus("");
   await restoreSavedJob();
+}
+
+// Reads the kyou.id item tabs open in this window so staff can hand the IDs to a
+// mode's list instead of copying them one by one.
+async function scanOpenTabs() {
+  try {
+    scannedItemTabs = collectItemTabs(await chrome.tabs.query({ currentWindow: true }));
+  } catch (error) {
+    scannedItemTabs = [];
+    setStatus(error.message || String(error), true);
+  }
+  renderTabsList();
+}
+
+function renderTabsList() {
+  tabsListEl.textContent = "";
+  if (!scannedItemTabs.length) {
+    const empty = document.createElement("p");
+    empty.className = "tabs-empty";
+    empty.textContent = "No kyou.id/items tabs open in this window.";
+    tabsListEl.append(empty);
+    updateTabToolButtons();
+    return;
+  }
+
+  for (const tab of scannedItemTabs) {
+    const row = document.createElement("label");
+    row.className = "tab-row";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = true;
+    checkbox.dataset.itemId = tab.itemId;
+    checkbox.addEventListener("change", updateTabToolButtons);
+    const itemId = document.createElement("span");
+    itemId.className = "tab-id";
+    itemId.textContent = tab.itemId;
+    const title = document.createElement("span");
+    title.className = "tab-title";
+    title.textContent = tab.title || tab.url;
+    row.append(checkbox, itemId, title);
+    tabsListEl.append(row);
+  }
+
+  updateTabToolButtons();
+  setStatus(`${scannedItemTabs.length} item ${scannedItemTabs.length === 1 ? "tab" : "tabs"} found.`);
+}
+
+function tabCheckboxes() {
+  return [...tabsListEl.querySelectorAll("input[type='checkbox']")];
+}
+
+function selectedTabIds() {
+  return tabCheckboxes()
+    .filter((checkbox) => checkbox.checked)
+    .map((checkbox) => checkbox.dataset.itemId);
+}
+
+function updateTabToolButtons() {
+  const boxes = tabCheckboxes();
+  const selected = selectedTabIds().length;
+  const disabled = selected === 0;
+  copyTabIdsButton.disabled = disabled;
+  addToDailyButton.disabled = disabled;
+  addToSpecialButton.disabled = disabled;
+  toggleTabIdsButton.disabled = boxes.length === 0;
+  toggleTabIdsButton.textContent = selected === boxes.length ? "Unselect all" : "Select all";
+}
+
+function toggleAllTabIds() {
+  const boxes = tabCheckboxes();
+  const selectAll = selectedTabIds().length < boxes.length;
+  for (const checkbox of boxes) {
+    checkbox.checked = selectAll;
+  }
+  updateTabToolButtons();
+}
+
+async function copySelectedTabIds() {
+  const ids = selectedTabIds();
+  try {
+    await navigator.clipboard.writeText(ids.join("\n"));
+    setStatus(`Copied ${ids.length} item ${ids.length === 1 ? "ID" : "IDs"}.`);
+  } catch (error) {
+    setStatus(error.message || "Clipboard write failed.", true);
+  }
+}
+
+// Writes straight to the target mode's stored list; loadMode() picks it up when
+// staff switch to that tab, so the tool never disturbs the mode on screen.
+async function addSelectedTabIdsTo(mode) {
+  const ids = selectedTabIds();
+  const key = itemIdsKey(mode);
+  const saved = await chrome.storage.local.get([key]);
+  const { text, added } = appendItemIds(saved[key] || "", ids);
+  if (!added.length) {
+    setStatus(`All ${ids.length} selected ${ids.length === 1 ? "ID is" : "IDs are"} already in ${MODES[mode].label}.`);
+    return;
+  }
+  await chrome.storage.local.set({ [key]: text });
+  setStatus(`Added ${added.length} of ${ids.length} to ${MODES[mode].label}.`);
+}
+
+function resetPreparedRows() {
+  current().preparedRows = [];
+  downloadButton.disabled = true;
+  fillButton.disabled = true;
+  previewEl.textContent = "";
 }
 
 async function previewItems() {

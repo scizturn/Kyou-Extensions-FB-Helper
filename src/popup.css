@@ -36,7 +36,7 @@ h1 {
 
 .mode-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 6px;
   margin-bottom: 14px;
   padding: 4px;
@@ -87,6 +87,85 @@ textarea {
   padding: 10px;
   color: #1f2328;
   background: #ffffff;
+}
+
+.field-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.field-head label {
+  margin-bottom: 0;
+}
+
+#scanTabsButton {
+  min-height: 0;
+  padding: 5px 9px;
+  font-size: 12px;
+  color: #24292f;
+  background: #d8dee4;
+}
+
+#tabsList {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid #d0d7de;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.tab-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  border-top: 1px solid #eaeef2;
+  padding: 8px 10px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.tab-row:first-child {
+  border-top: 0;
+}
+
+.tab-row input {
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.tab-id {
+  font-weight: 700;
+}
+
+.tab-title {
+  overflow: hidden;
+  color: #59636e;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.tabs-empty {
+  margin: 0;
+  padding: 12px 10px;
+  color: #59636e;
+}
+
+#addToDailyButton,
+#addToSpecialButton {
+  color: #ffffff;
+  background: #0969da;
+}
+
+#addToDailyButton:disabled,
+#addToSpecialButton:disabled {
+  color: #8c959f;
+  background: #d8dee4;
 }
 
 .actions {

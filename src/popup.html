@@ -13,9 +13,10 @@
         <span id="pageState">Album page required</span>
       </header>
 
-      <nav class="mode-tabs" role="tablist" aria-label="Upload mode">
+      <nav class="mode-tabs" role="tablist" aria-label="Mode">
         <button id="modeDailyTab" class="mode-tab is-active" type="button" role="tab" data-mode="daily">Daily</button>
         <button id="modeSpecialTab" class="mode-tab" type="button" role="tab" data-mode="special">Special Sale</button>
+        <button id="modeTabsTab" class="mode-tab" type="button" role="tab" data-mode="tabs">Open Tabs</button>
       </nav>
 
       <details>
@@ -26,6 +27,7 @@
         <input id="furinaToken" type="password" placeholder="Shared token from Furina .env">
       </details>
 
+      <div id="uploadView">
       <label for="dataSource">Data source</label>
       <select id="dataSource">
         <option value="sheet">Sheet (helper tab)</option>
@@ -48,6 +50,21 @@
         <button id="fillButton" type="button" disabled>Fill captions</button>
         <button id="refreshTabsButton" type="button">Refresh helpers</button>
         <button id="clearButton" type="button">Clear saved job</button>
+      </div>
+      </div>
+
+      <div id="tabsView" hidden>
+        <div class="field-head">
+          <label id="tabsListLabel">kyou.id item tabs</label>
+          <button id="scanTabsButton" type="button">Rescan</button>
+        </div>
+        <div id="tabsList" role="group" aria-labelledby="tabsListLabel"></div>
+        <div class="actions">
+          <button id="copyTabIdsButton" type="button" disabled>Copy IDs</button>
+          <button id="toggleTabIdsButton" type="button" disabled>Unselect all</button>
+          <button id="addToDailyButton" type="button" disabled>Add to Daily</button>
+          <button id="addToSpecialButton" type="button" disabled>Add to Special Sale</button>
+        </div>
       </div>
 
       <section id="status" aria-live="polite"></section>
